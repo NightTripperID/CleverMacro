@@ -135,73 +135,91 @@ local function GetMouseOverUnit()
     end
 end
 
+local Conditions = {
+
+    alive = function(args)
+        return not (UnitIsDeadOrGhost(args.target))
+    end,
+    
+    combat = function(args)
+        return UnitAffectingCombat("player")
+    end,
+    
+    dead = function(args)
+        return UnitIsDeadOrGhost(args.target)
+    end,
+    
+    exists = function(args)
+        return UnitExists(args.target)
+    end,
+
+    form = function(args)
+        local result
+        if args.v == true then
+            result = GetCurrentShapeshiftForm() ~= nil
+        else
+            result = args.v[GetCurrentShapeshiftForm() or 0] 
+        end
+        return result
+    end,
+
+    harm = function(args)
+        return UnitCanAttack("player", args.target)
+    end,
+
+    help = function(args)
+        return UnitCanAssist("player", args.target)
+    end,
+
+    modifier = function(args)
+        local result
+        local v = args.v
+        if v == true then
+            result = IsAltKeyDown() or IsControlKeyDown() or IsShiftKeyDown()
+        else
+            result = IsAltKeyDown() and v.alt
+            result = result or IsControlKeyDown() and v.ctrl
+            result = result or IsShiftKeyDown() and v.shift
+        end
+        return result
+    end,
+
+    alt = function(args)
+        return IsAltKeyDown()
+    end,
+
+    ctrl = function(args)
+        return IsCtrlKeyDown()
+    end,
+
+    shift = function(args)
+        return IsShiftKeyDown()
+    end
+}
+
+-- condition aliases
+Conditions.stance = Conditions.form
+Conditions.mod = Conditions.modifier
+
 local function TestConditions(conditions, target)
     local result = true
 
     for k, v in pairs(conditions) do
         local _, no = string.find(k, "^no")
         local mod = no and string.sub(k, no + 1) or k
+
+        local args = {}
+        args.target = target
+        args.v = v
+
+        if not Conditions[mod] then return false end
         
-        if mod == "help" then 
-            result = UnitCanAssist("player", target) 
-        elseif mod == "exists" then
-            result = UnitExists(target)
-        elseif mod == "harm" then
-            result = UnitCanAttack("player", target)
-        elseif mod == "dead" then
-            result = UnitIsDead(target) or UnitIsGhost(target)
-        elseif mod == "combat" then
-            result = UnitAffectingCombat("player")
-        elseif mod == "mod" or mod == "modifier" then
-            if v == true then
-                result = IsAltKeyDown() or IsControlKeyDown() or IsShiftKeyDown()
-            else
-                result = IsAltKeyDown() and v.alt
-                result = result or IsControlKeyDown() and v.ctrl
-                result = result or IsShiftKeyDown() and v.shift
-            end
-        elseif mod == "form" or mod == "stance" then
-            if v == true then
-                result = GetCurrentShapeshiftForm() ~= nil
-            else
-                result = v[GetCurrentShapeshiftForm() or 0] 
-            end
-
-        -- Conditions that are NOT a part of the official implementation.
-        elseif mod == "shift" then
-             result = IsShiftKeyDown()
-        elseif mod == "alt" then
-            result = IsAltKeyDown()
-        elseif mod == "ctrl" then
-            result = IsControlKeyDown()
-        elseif mod == "alive" then
-             result = not (UnitIsDead(target) or UnitIsGhost())
-
-        -- Gunjak additions
-        -- 1 = 9.9 yards
-        -- 2 = 11.11 yards
-        -- 3 = 9.9 yards
-        -- 4 = 28 yards
-        -- (both 1 and 3 are 9.9 yards for some reason)
-        elseif mod == "dist" or mod == "distance" then
-            if v.one == true or v[1] == true then
-                result = CheckInteractDistance(target, 1)
-            elseif v.two == true or v[2] == true then
-                result = CheckInteractDistance(target, 2)
-            elseif v.three == true or v[3] == true then
-                result = CheckInteractDistance(target, 3)
-            elseif v.four == true or v[4] == true then
-                result = CheckInteractDistance(target, 4)
-            end 
-        else
-            return false
-        end
+        result = Conditions[mod](args)
         
         if no then result = not result end
         
         if not result then return false end
     end
-    
     return true
 end
 
@@ -974,5 +992,6 @@ end
 CleverMacro.Log = Log
 CleverMacro.GetArg = GetArg
 CleverMacro.ParseArguments = ParseArguments
+CleverMacro.Conditions = Conditions
 
 DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCCCCleverMacro |r" .. VERSION .. "|cFF00CCCC loaded|r")
