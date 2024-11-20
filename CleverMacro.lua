@@ -102,6 +102,7 @@ local function IsUnitValid(unit)
     repeat
         local b, e, name, n
         for _, p in ipairs(UNITS) do
+            -- b = beginning index, e = ending index, name = name of found unit (e.g. "target"), n = number (e.g. raid member number 30, etc)
             b, e, name, n = string.find(unit, "^" .. p, offset)
            if e then break end
         end
@@ -175,7 +176,23 @@ local function TestConditions(conditions, target)
             result = IsControlKeyDown()
         elseif mod == "alive" then
              result = not (UnitIsDead(target) or UnitIsGhost())
-             
+
+        -- Gunjak additions
+        -- 1 = 9.9 yards
+        -- 2 = 11.11 yards
+        -- 3 = 9.9 yards
+        -- 4 = 28 yards
+        -- (both 1 and 3 are 9.9 yards for some reason)
+        elseif mod == "dist" or mod == "distance" then
+            if v.one == true or v[1] == true then
+                result = CheckInteractDistance(target, 1)
+            elseif v.two == true or v[2] == true then
+                result = CheckInteractDistance(target, 2)
+            elseif v.three == true or v[3] == true then
+                result = CheckInteractDistance(target, 3)
+            elseif v.four == true or v[4] == true then
+                result = CheckInteractDistance(target, 4)
+            end 
         else
             return false
         end
@@ -224,17 +241,24 @@ local function ParseArguments(s)
         
         local offset = 1
         repeat
-            local _, e, sconds = string.find(sarg, "%s*%[([^]]*)]%s*", offset)
+            local _, e, sconds = string.find(sarg, "%s*%[([^]]*)]%s*", offset) -- regex captures open brackets, close brackets, and the contents inbetween, e.g: [mod:shift]
             if not sconds then break end
 
             local conditionGroup = {
-                target = "target",
+                target = "target", -- by default, the condition group is the player's target
                 conditions = {}
             }
             table.insert(arg.conditionGroups, conditionGroup)
             
             for _, scond in ipairs(Split(sconds, ",")) do
-                local _, _, a, k, q, v = string.find(scond, "^%s*(@?)(%w+)(:?)([^%s]*)%s*$");      
+                -- the below regex captures the contents in between a set of brackets
+                -- examples: mod, modifier, mod:@mouseover, mod:shift, etc
+                -- it consists of four capture groups, stored in a, k, q, and v
+                -- a is the first capture group, which is the optional ampersand
+                -- k is the second capture group, which is the only required group, e.g. "mod" or "modifier", "help", etc
+                -- q is the third capture group, which is the optional colon
+                -- v is the fourth capture group, which is any additional characters after the colon, e.g. "shift", "alt", "ctrl", etc
+                local _, _, a, k, q, v = string.find(scond, "^%s*(@?)(%w+)(:?)([^%s]*)%s*$"); 
                 if a then
                     if a == "@" and q == "" and v == "" then
                         conditionGroup.target = k
@@ -833,19 +857,19 @@ SlashCmdList["CAST"] = function(msg, command)
     local args = command and command.args
     if not args then
         args = ParseArguments(msg)
-        COMMANDS["/cast"](args)
+        COMMANDS["/cast"](args) -- this function popluates spellSlot in the arguments, which is later used by the CastSpell method
     end
 
     local arg, target = GetArg(args)
     if not arg or not arg.spellSlot then return end
 
-    local retarget = not UnitIsUnit(target, "target")
+    local retarget = not UnitIsUnit(target, "target") -- UnitIsUnit() determines if the arguments are the same unit
     if retarget then
         TargetUnit(target)
         -- if not UnitIsUnit(target, "target") then return end
     end            
 
-    CastSpell(arg.spellSlot, "spell")
+    CastSpell(arg.spellSlot, "spell") -- this function actually casts the spell
     if retarget then TargetLastTarget() end
 end
 
@@ -865,7 +889,6 @@ SlashCmdList["USE"] = function(msg, command)
     local retarget = not UnitIsUnit(target, "target")
     if retarget then
         TargetUnit(target)
-        -- if not UnitIsUnit(target, "target") then return end
     end            
 
     if item.bagID and item.slot then
@@ -909,7 +932,6 @@ SlashCmdList["CASTSEQUENCE"] = function(msg, command)
         local retarget = not UnitIsUnit(target, "target")
         if retarget then
             TargetUnit(target)
-            -- if not UnitIsUnit(target, "target") then return end
         end
         
         CastSpell(spellSlot, "spell")
@@ -927,7 +949,7 @@ SlashCmdList["CANCELFORM"] = function(msg)
     local arg = GetArg(command and command.args or ParseArguments(msg))
     if arg then CancelShapeshiftForm() end
 end
-
+------------------------------------------
 SLASH_CANCELFORM1 = "/cancelform"
 SLASH_CASTSEQUENCE1 = "/castsequence"
 SLASH_STOPMACRO1 = "/stopmacro"
@@ -950,5 +972,7 @@ CleverMacro.RegisterMouseOverResolver = function(fn)
 end
 
 CleverMacro.Log = Log
+CleverMacro.GetArg = GetArg
+CleverMacro.ParseArguments = ParseArguments
 
 DEFAULT_CHAT_FRAME:AddMessage("|cFF00CCCCCleverMacro |r" .. VERSION .. "|cFF00CCCC loaded|r")
